@@ -132,7 +132,7 @@ jobs:
       if: steps.cache-emacs-source.outputs.cache-hit != 'true'
       run: |
         wget -O emacs-${{ env.EMACS_VERSION }}.tar.xz \
-          "https://ftp.gnu.org/gnu/emacs/emacs-${{ env.EMACS_VERSION }}.tar.xz"
+          "https://ftpmirror.gnu.org/gnu/emacs/emacs-${{ env.EMACS_VERSION }}.tar.xz"
         tar -xf emacs-${{ env.EMACS_VERSION }}.tar.xz
 
     - name: Configure build environment
