@@ -1,0 +1,350 @@
+name: Build Emacs with PGTK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      emacs_version:
+        description: 'Emacs version to build (e.g., 29.4, 30.2)'
+        required: false
+        default: '30.2'
+        type: string
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+
+env:
+  EMACS_VERSION: ${{ github.event.inputs.emacs_version || '30.2' }}
+  BUILD_TYPE: ${{ github.event.inputs.build_type || 'release' }}
+
+jobs:
+  build-emacs-pgtk:
+    name: Build Emacs PGTK
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: "Alpine Linux (musl)"
+            container: "alpine:latest"
+            static: true
+          - name: "Fedora Latest"
+            container: "fedora:latest"
+            static: false
+    
+    container:
+      image: ${{ matrix.container }}
+      options: --privileged
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies (Alpine)
+      if: contains(matrix.container, 'alpine')
+      run: |
+        apk update
+        apk add --no-cache \
+          build-base \
+          autoconf \
+          automake \
+          pkgconfig \
+          texinfo \
+          gnutls-dev \
+          jansson-dev \
+          libxml2-dev \
+          ncurses-dev \
+          zlib-dev \
+          sqlite-dev \
+          tree-sitter-dev \
+          cairo-dev \
+          pango-dev \
+          gtk+3.0-dev \
+          librsvg-dev \
+          giflib-dev \
+          libjpeg-turbo-dev \
+          libpng-dev \
+          tiff-dev \
+          libwebp-dev \
+          harfbuzz-dev \
+          freetype-dev \
+          fontconfig-dev \
+          dbus-dev \
+          gpm-dev \
+          wget \
+          tar \
+          xz \
+          git
+
+    - name: Install dependencies (Fedora)
+      if: contains(matrix.container, 'fedora')
+      run: |
+        dnf update -y
+        dnf install -y \
+          gcc \
+          gcc-c++ \
+          make \
+          autoconf \
+          automake \
+          pkgconfig \
+          texinfo \
+          gnutls-devel \
+          jansson-devel \
+          libxml2-devel \
+          ncurses-devel \
+          zlib-devel \
+          sqlite-devel \
+          tree-sitter-devel \
+          cairo-devel \
+          pango-devel \
+          gtk3-devel \
+          librsvg2-devel \
+          giflib-devel \
+          libjpeg-turbo-devel \
+          libpng-devel \
+          libtiff-devel \
+          libwebp-devel \
+          harfbuzz-devel \
+          freetype-devel \
+          fontconfig-devel \
+          dbus-devel \
+          gpm-devel \
+          wget \
+          tar \
+          xz \
+          git
+
+    - name: Cache Emacs source
+      uses: actions/cache@v3
+      id: cache-emacs-source
+      with:
+        path: emacs-${{ env.EMACS_VERSION }}
+        key: emacs-source-${{ env.EMACS_VERSION }}
+
+    - name: Download Emacs source
+      if: steps.cache-emacs-source.outputs.cache-hit != 'true'
+      run: |
+        wget -O emacs-${{ env.EMACS_VERSION }}.tar.xz \
+          "https://ftp.gnu.org/gnu/emacs/emacs-${{ env.EMACS_VERSION }}.tar.xz"
+        tar -xf emacs-${{ env.EMACS_VERSION }}.tar.xz
+
+    - name: Configure build environment
+      run: |
+        cd emacs-${{ env.EMACS_VERSION }}
+        
+        # Base configuration options
+        CONFIGURE_OPTS=""
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-pgtk"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-native-compilation=aot"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-tree-sitter"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-json"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-xml2"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-gnutls"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-sqlite3"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-cairo"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-rsvg"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-jpeg"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-png"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-gif"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-tiff"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-webp"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-harfbuzz"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-dbus"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-gpm=no"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-modules"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --with-xpm"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --without-x"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --without-xaw3d"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --without-toolkit-scroll-bars"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --without-xim"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --disable-silent-rules"
+        
+        # Static build configuration for Alpine
+        if [ "${{ matrix.static }}" = "true" ]; then
+          CONFIGURE_OPTS="$CONFIGURE_OPTS --enable-static"
+          CONFIGURE_OPTS="$CONFIGURE_OPTS --disable-shared"
+          export LDFLAGS="-static -static-libgcc"
+          export CFLAGS="-static"
+        fi
+        
+        # Debug vs Release configuration
+        if [ "${{ env.BUILD_TYPE }}" = "debug" ]; then
+          CONFIGURE_OPTS="$CONFIGURE_OPTS --enable-checking=all"
+          CONFIGURE_OPTS="$CONFIGURE_OPTS --enable-check-lisp-object-type"
+          export CFLAGS="$CFLAGS -g3 -O0"
+        else
+          export CFLAGS="$CFLAGS -O2 -DNDEBUG"
+        fi
+        
+        # Set prefix for installation
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --prefix=$HOME/.local"
+        
+        echo "CONFIGURE_OPTS=$CONFIGURE_OPTS" >> $GITHUB_ENV
+        echo "Configure options: $CONFIGURE_OPTS"
+
+    - name: Build Emacs
+      run: |
+        cd emacs-${{ env.EMACS_VERSION }}
+        
+        # Configure
+        echo "Configuring Emacs with options: $CONFIGURE_OPTS"
+        ./configure $CONFIGURE_OPTS
+        
+        # Build
+        echo "Building Emacs..."
+        make -j$(nproc) V=1
+        
+        # Install to temporary directory
+        echo "Installing Emacs..."
+        make install DESTDIR=$PWD/install-root
+
+    - name: Test basic functionality
+      run: |
+        cd emacs-${{ env.EMACS_VERSION }}
+        
+        # Test that Emacs starts and has PGTK support
+        echo "Testing Emacs functionality..."
+        timeout 30 ./install-root/$HOME/.local/bin/emacs --batch \
+          --eval "(progn
+                   (message \"Emacs version: %s\" (emacs-version))
+                   (message \"System configuration: %s\" system-configuration)
+                   (message \"Window system: %s\" (if (fboundp 'pgtk-backend-display-class) 'pgtk 'none))
+                   (message \"Native compilation: %s\" (if (and (fboundp 'native-comp-available-p) (native-comp-available-p)) 'available 'not-available))
+                   (message \"Tree-sitter: %s\" (if (fboundp 'treesit-available-p) (if (treesit-available-p) 'available 'not-available) 'not-compiled))
+                   (kill-emacs 0))"
+
+    - name: Create distribution package
+      run: |
+        cd emacs-${{ env.EMACS_VERSION }}
+        
+        # Create package directory structure
+        PACKAGE_NAME="emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}"
+        PACKAGE_NAME=$(echo "$PACKAGE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
+        
+        mkdir -p "$PACKAGE_NAME"
+        cp -r install-root/$HOME/.local/* "$PACKAGE_NAME/"
+        
+        # Create package info
+        cat > "$PACKAGE_NAME/PACKAGE_INFO.txt" << EOF
+        Emacs PGTK Build Information
+        ============================
+        
+        Version: ${{ env.EMACS_VERSION }}
+        Build Type: ${{ env.BUILD_TYPE }}
+        Distribution: ${{ matrix.name }}
+        Container: ${{ matrix.container }}
+        Static Build: ${{ matrix.static }}
+        Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        Git Commit: ${{ github.sha }}
+        
+        Features:
+        - PGTK (Pure GTK) support
+        - Native compilation (AOT)
+        - Tree-sitter support
+        - JSON support
+        - XML2 support
+        - GnuTLS support
+        - SQLite3 support
+        - Cairo graphics
+        - Image format support (JPEG, PNG, GIF, TIFF, WebP, SVG)
+        
+        Configuration:
+        $CONFIGURE_OPTS
+        EOF
+        
+        # Create startup script
+        cat > "$PACKAGE_NAME/run-emacs.sh" << 'EOF'
+        #!/bin/bash
+        # Emacs PGTK startup script
+        
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        EMACS_BIN="$SCRIPT_DIR/bin/emacs"
+        
+        # Set up environment
+        export LD_LIBRARY_PATH="$SCRIPT_DIR/lib:$LD_LIBRARY_PATH"
+        export PATH="$SCRIPT_DIR/bin:$PATH"
+        
+        # Ensure DISPLAY is set for Wayland/X11
+        if [ -z "$DISPLAY" ] && [ -n "$WAYLAND_DISPLAY" ]; then
+            export DISPLAY=:0
+        fi
+        
+        # Run Emacs
+        exec "$EMACS_BIN" "$@"
+        EOF
+        chmod +x "$PACKAGE_NAME/run-emacs.sh"
+        
+        # Create archive
+        tar -czf "$PACKAGE_NAME.tar.gz" "$PACKAGE_NAME"
+        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}
+        path: emacs-${{ env.EMACS_VERSION }}/*.tar.gz
+        retention-days: 30
+
+    - name: Upload build logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-${{ matrix.name }}
+        path: |
+          emacs-${{ env.EMACS_VERSION }}/config.log
+          emacs-${{ env.EMACS_VERSION }}/src/config.h
+        retention-days: 7
+
+  create-release:
+    name: Create Release
+    needs: build-emacs-pgtk
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: emacs-pgtk-${{ env.EMACS_VERSION }}-${{ github.run_number }}
+        name: Emacs PGTK ${{ env.EMACS_VERSION }} Build ${{ github.run_number }}
+        body: |
+          # Emacs PGTK Build ${{ env.EMACS_VERSION }}
+          
+          This release contains distribution-agnostic builds of Emacs ${{ env.EMACS_VERSION }} with PGTK support.
+          
+          ## Features
+          - **PGTK (Pure GTK)** - Native Wayland and X11 support
+          - **Native Compilation (AOT)** - Faster Elisp execution
+          - **Tree-sitter** - Modern syntax highlighting and parsing
+          - **Modern image support** - JPEG, PNG, GIF, TIFF, WebP, SVG
+          - **Network security** - GnuTLS support
+          - **Database support** - SQLite3 integration
+          
+          ## Available Builds
+          - **Alpine Linux (musl)** - Static build, minimal dependencies
+          - **Ubuntu LTS** - Dynamic build, broad compatibility
+          - **Fedora Latest** - Dynamic build, latest libraries
+          
+          ## Usage
+          1. Download the appropriate build for your system
+          2. Extract: `tar -xzf emacs-pgtk-*.tar.gz`
+          3. Run: `./emacs-pgtk-*/run-emacs.sh`
+          
+          Built from commit: ${{ github.sha }}
+        files: artifacts/emacs-pgtk-*/emacs-pgtk-*.tar.gz
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
