@@ -208,7 +208,7 @@ jobs:
         
         # Test that Emacs starts and has PGTK support
         echo "Testing Emacs functionality..."
-        timeout 30 ./install-root//usr/local/bin/emacs --batch \
+        timeout 30 ./install-root/usr/local/bin/emacs --batch \
           --eval "(progn
                    (message \"Emacs version: %s\" (emacs-version))
                    (message \"System configuration: %s\" system-configuration)
@@ -226,7 +226,7 @@ jobs:
         PACKAGE_NAME=$(echo "$PACKAGE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
         
         mkdir -p "$PACKAGE_NAME"
-        cp -r install-root//usr/local/* "$PACKAGE_NAME/"
+        cp -r install-root/usr/local/* "$PACKAGE_NAME/"
         
         # Create package info
         cat > "$PACKAGE_NAME/PACKAGE_INFO.txt" << EOF
