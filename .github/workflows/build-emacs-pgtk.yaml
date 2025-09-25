@@ -162,7 +162,6 @@ jobs:
         CONFIGURE_OPTS="$CONFIGURE_OPTS --with-xpm"
         CONFIGURE_OPTS="$CONFIGURE_OPTS --without-x"
         CONFIGURE_OPTS="$CONFIGURE_OPTS --without-xaw3d"
-        CONFIGURE_OPTS="$CONFIGURE_OPTS --without-toolkit-scroll-bars"
         CONFIGURE_OPTS="$CONFIGURE_OPTS --without-xim"
         CONFIGURE_OPTS="$CONFIGURE_OPTS --disable-silent-rules"
         
