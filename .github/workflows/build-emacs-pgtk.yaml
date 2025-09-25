@@ -101,7 +101,7 @@ jobs:
           ncurses-devel \
           zlib-devel \
           sqlite-devel \
-          tree-sitter-devel \
+          libtree-sitter-devel \
           cairo-devel \
           pango-devel \
           gtk3-devel \
