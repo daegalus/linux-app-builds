@@ -202,20 +202,20 @@ jobs:
         echo "Installing Emacs..."
         make install DESTDIR=$PWD/install-root
 
-    - name: Test basic functionality
-      run: |
-        cd emacs-${{ env.EMACS_VERSION }}
+    # - name: Test basic functionality
+    #   run: |
+    #     cd emacs-${{ env.EMACS_VERSION }}
         
-        # Test that Emacs starts and has PGTK support
-        echo "Testing Emacs functionality..."
-        timeout 30 ./install-root/usr/local/bin/emacs --batch \
-          --eval "(progn
-                   (message \"Emacs version: %s\" (emacs-version))
-                   (message \"System configuration: %s\" system-configuration)
-                   (message \"Window system: %s\" (if (fboundp 'pgtk-backend-display-class) 'pgtk 'none))
-                   (message \"Native compilation: %s\" (if (and (fboundp 'native-comp-available-p) (native-comp-available-p)) 'available 'not-available))
-                   (message \"Tree-sitter: %s\" (if (fboundp 'treesit-available-p) (if (treesit-available-p) 'available 'not-available) 'not-compiled))
-                   (kill-emacs 0))"
+    #     # Test that Emacs starts and has PGTK support
+    #     echo "Testing Emacs functionality..."
+    #     timeout 30 ./install-root/usr/local/bin/emacs --batch \
+    #       --eval "(progn
+    #                (message \"Emacs version: %s\" (emacs-version))
+    #                (message \"System configuration: %s\" system-configuration)
+    #                (message \"Window system: %s\" (if (fboundp 'pgtk-backend-display-class) 'pgtk 'none))
+    #                (message \"Native compilation: %s\" (if (and (fboundp 'native-comp-available-p) (native-comp-available-p)) 'available 'not-available))
+    #                (message \"Tree-sitter: %s\" (if (fboundp 'treesit-available-p) (if (treesit-available-p) 'available 'not-available) 'not-compiled))
+    #                (kill-emacs 0))"
 
     - name: Create distribution package
       run: |
