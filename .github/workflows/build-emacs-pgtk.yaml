@@ -76,6 +76,7 @@ jobs:
           harfbuzz-dev \
           freetype-dev \
           fontconfig-dev \
+          libgccjit-dev \
           dbus-dev \
           gpm-dev \
           wget \
@@ -111,6 +112,7 @@ jobs:
           libpng-devel \
           libtiff-devel \
           libwebp-devel \
+          libgccjit-devel \
           harfbuzz-devel \
           freetype-devel \
           fontconfig-devel \
