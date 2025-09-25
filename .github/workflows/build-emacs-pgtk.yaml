@@ -1,10 +1,6 @@
 name: Build Emacs with PGTK
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       emacs_version:
@@ -185,7 +181,7 @@ jobs:
         fi
         
         # Set prefix for installation
-        CONFIGURE_OPTS="$CONFIGURE_OPTS --prefix=$HOME/.local"
+        CONFIGURE_OPTS="$CONFIGURE_OPTS --prefix=/usr/local"
         
         echo "CONFIGURE_OPTS=$CONFIGURE_OPTS" >> $GITHUB_ENV
         echo "Configure options: $CONFIGURE_OPTS"
@@ -212,7 +208,7 @@ jobs:
         
         # Test that Emacs starts and has PGTK support
         echo "Testing Emacs functionality..."
-        timeout 30 ./install-root/$HOME/.local/bin/emacs --batch \
+        timeout 30 ./install-root//usr/local/bin/emacs --batch \
           --eval "(progn
                    (message \"Emacs version: %s\" (emacs-version))
                    (message \"System configuration: %s\" system-configuration)
@@ -230,7 +226,7 @@ jobs:
         PACKAGE_NAME=$(echo "$PACKAGE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
         
         mkdir -p "$PACKAGE_NAME"
-        cp -r install-root/$HOME/.local/* "$PACKAGE_NAME/"
+        cp -r install-root//usr/local/* "$PACKAGE_NAME/"
         
         # Create package info
         cat > "$PACKAGE_NAME/PACKAGE_INFO.txt" << EOF
