@@ -17,6 +17,9 @@ on:
         - release
         - debug
 
+permissions:
+  contents: read
+
 env:
   EMACS_VERSION: ${{ github.event.inputs.emacs_version || '30.2' }}
   BUILD_TYPE: ${{ github.event.inputs.build_type || 'release' }}
