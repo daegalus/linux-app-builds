@@ -34,7 +34,7 @@ jobs:
         include:
           - name: 'alpine-linux-musl'
             container: 'alpine:latest'
-            static: true
+            static: false
             arch: 'amd64'
             runner: 'ubuntu-latest'
           - name: 'ubuntu-lts'
@@ -229,14 +229,6 @@ jobs:
           CONFIGURE_OPTS="$CONFIGURE_OPTS --without-xim"
           CONFIGURE_OPTS="$CONFIGURE_OPTS --disable-silent-rules"
 
-          # Static build configuration for Alpine
-          if [ "${{ matrix.static }}" = "true" ]; then
-            CONFIGURE_OPTS="$CONFIGURE_OPTS --enable-static"
-            CONFIGURE_OPTS="$CONFIGURE_OPTS --disable-shared"
-            export LDFLAGS="-static -static-libgcc"
-            export CFLAGS="-static"
-          fi
-
           # Debug vs Release configuration
           if [ "${{ env.BUILD_TYPE }}" = "debug" ]; then
             CONFIGURE_OPTS="$CONFIGURE_OPTS --enable-checking=all"
@@ -336,13 +328,48 @@ jobs:
           #!/bin/bash
           # Emacs PGTK startup script
 
+          # Get script directory without following symlinks
           SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          EMACS_BIN="$SCRIPT_DIR/bin/emacs"
+
+          # If this script was moved to a bin/ directory (e.g., by a package manager),
+          # assume the package root is the parent directory
+          if [[ "$(basename "$SCRIPT_DIR")" == "bin" ]] && [ ! -d "$SCRIPT_DIR/bin" ]; then
+            SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
+          fi
+
+          # Find emacs binary (look for versioned binary first, then fall back to generic)
+          EMACS_BIN=""
+          if [ -d "$SCRIPT_DIR/bin" ]; then
+            # Look for emacs-* first (versioned)
+            for f in "$SCRIPT_DIR/bin/emacs-"*; do
+              if [ -x "$f" ] && [ ! -d "$f" ]; then
+                EMACS_BIN="$f"
+                break
+              fi
+            done
+            # Fall back to generic emacs
+            if [ -z "$EMACS_BIN" ] && [ -x "$SCRIPT_DIR/bin/emacs" ]; then
+              EMACS_BIN="$SCRIPT_DIR/bin/emacs"
+            fi
+          fi
+
+          if [ -z "$EMACS_BIN" ] || [ ! -f "$EMACS_BIN" ]; then
+            echo "Error: Cannot find emacs binary in $SCRIPT_DIR/bin/"
+            echo ""
+            echo "This script should be run from the extracted package directory."
+            echo "If using a package manager, ensure the entire package structure is preserved."
+            exit 1
+          fi
 
           # Set up environment
           export LD_LIBRARY_PATH="$SCRIPT_DIR/lib:$LD_LIBRARY_PATH"
           export PATH="$SCRIPT_DIR/bin:$PATH"
           export GSETTINGS_SCHEMA_DIR="$SCRIPT_DIR/share/glib-2.0/schemas"
+
+          # Add Homebrew paths if they exist (for systems like immutable distros)
+          if [ -d "/home/linuxbrew/.linuxbrew/lib" ]; then
+            export LD_LIBRARY_PATH="/home/linuxbrew/.linuxbrew/lib:$LD_LIBRARY_PATH"
+          fi
 
           # Ensure DISPLAY is set for Wayland/X11
           if [ -z "$DISPLAY" ] && [ -n "$WAYLAND_DISPLAY" ]; then
@@ -407,7 +434,7 @@ jobs:
 
             ## Available Builds
             Each distribution is available for both amd64 and arm64 architectures:
-            - **Alpine Linux (musl)** - Static build, minimal dependencies
+            - **Alpine Linux (musl)** - musl-based, minimal dependencies
             - **Ubuntu LTS** - Dynamic build, broad compatibility
             - **Fedora Latest** - Dynamic build, latest libraries
 
