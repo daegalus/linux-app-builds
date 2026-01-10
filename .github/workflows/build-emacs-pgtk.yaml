@@ -287,6 +287,9 @@ jobs:
         run: |
           cd emacs-${{ env.EMACS_VERSION }}
 
+          # Clean up any old tar.gz files from previous runs
+          rm -f *.tar.gz
+
           # Create package directory structure
           PACKAGE_NAME="emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}-${{ matrix.arch }}"
 
@@ -382,6 +385,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: emacs-pgtk-*
 
       - name: Create release
         uses: softprops/action-gh-release@v1
