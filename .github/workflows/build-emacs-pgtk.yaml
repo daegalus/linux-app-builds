@@ -228,6 +228,7 @@ jobs:
           # Create package directory structure
           PACKAGE_NAME="emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}"
           PACKAGE_NAME=$(echo "$PACKAGE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
+          ARTIFACT_NAME=$(echo "emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
 
           mkdir -p "$PACKAGE_NAME"
           cp -r install-root/usr/local/* "$PACKAGE_NAME/"
@@ -292,19 +293,22 @@ jobs:
           # Create archive
           tar -czf "$PACKAGE_NAME.tar.gz" "$PACKAGE_NAME"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: emacs-${{ env.EMACS_VERSION }}/*.tar.gz
           retention-days: 30
 
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
+        env:
+          LOG_ARTIFACT_NAME: build-logs-${{ env.ARTIFACT_NAME }}
         with:
-          name: build-logs-${{ matrix.name }}
+          name: ${{ env.LOG_ARTIFACT_NAME }}
           path: |
             emacs-${{ env.EMACS_VERSION }}/config.log
             emacs-${{ env.EMACS_VERSION }}/src/config.h
@@ -351,7 +355,7 @@ jobs:
             3. Run: `./emacs-pgtk-*/run-emacs.sh`
 
             Built from commit: ${{ github.sha }}
-          files: artifacts/emacs-pgtk-*/emacs-pgtk-*.tar.gz
+          files: artifacts/*/*.tar.gz
           draft: false
           prerelease: false
         env:
