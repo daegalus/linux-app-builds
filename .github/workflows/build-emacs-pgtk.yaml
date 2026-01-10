@@ -353,12 +353,11 @@ jobs:
 
           # Create archive
           tar -czf "$PACKAGE_NAME.tar.gz" "$PACKAGE_NAME"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACKAGE_NAME }}
+          name: emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}-${{ matrix.arch }}
           path: emacs-${{ env.EMACS_VERSION }}/*.tar.gz
           retention-days: 30
 
