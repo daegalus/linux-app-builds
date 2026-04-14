@@ -238,8 +238,9 @@ jobs:
             export CFLAGS="$CFLAGS -O2 -DNDEBUG"
           fi
 
-          # Set prefix for installation
-          CONFIGURE_OPTS="$CONFIGURE_OPTS --prefix=/usr/local"
+          # Use a placeholder prefix that won't exist on any system
+          # The environment variables in run-emacs.sh will override these paths at runtime
+          CONFIGURE_OPTS="$CONFIGURE_OPTS --prefix=/@@EMACS_PORTABLE@@"
 
           echo "CONFIGURE_OPTS=$CONFIGURE_OPTS" >> $GITHUB_ENV
           echo "Configure options: $CONFIGURE_OPTS"
@@ -286,7 +287,7 @@ jobs:
           PACKAGE_NAME="emacs-pgtk-${{ env.EMACS_VERSION }}-${{ matrix.name }}-${{ matrix.arch }}"
 
           mkdir -p "$PACKAGE_NAME"
-          cp -r install-root/usr/local/* "$PACKAGE_NAME/"
+          cp -r install-root/@@EMACS_PORTABLE@@/* "$PACKAGE_NAME/"
 
           # Compile gsettings schemas
           if [ -d "$PACKAGE_NAME/share/glib-2.0/schemas" ]; then
@@ -364,6 +365,24 @@ jobs:
           # Set up environment
           export LD_LIBRARY_PATH="$SCRIPT_DIR/lib:$LD_LIBRARY_PATH"
           export PATH="$SCRIPT_DIR/bin:$PATH"
+          
+          # Dynamically find Emacs version directory
+          EMACS_VERSION_DIR=""
+          if [ -d "$SCRIPT_DIR/share/emacs" ]; then
+            EMACS_VERSION_DIR=$(ls -1 "$SCRIPT_DIR/share/emacs" | grep -E '^[0-9]+\.[0-9]+' | head -n1)
+          fi
+          
+          # Override hardcoded prefix paths to use the actual package location
+          if [ -n "$EMACS_VERSION_DIR" ] && [ -d "$SCRIPT_DIR/share/emacs/$EMACS_VERSION_DIR" ]; then
+            export EMACSLOADPATH="$SCRIPT_DIR/share/emacs/$EMACS_VERSION_DIR/lisp:"
+            export EMACSDATA="$SCRIPT_DIR/share/emacs/$EMACS_VERSION_DIR/etc"
+            export EMACSDOC="$SCRIPT_DIR/share/emacs/$EMACS_VERSION_DIR/etc"
+          fi
+          
+          if [ -n "$EMACS_VERSION_DIR" ] && [ -d "$SCRIPT_DIR/lib/emacs/$EMACS_VERSION_DIR" ]; then
+            export EMACSNATIVELOADPATH="$SCRIPT_DIR/lib/emacs/$EMACS_VERSION_DIR/native-lisp:"
+          fi
+          
           export GSETTINGS_SCHEMA_DIR="$SCRIPT_DIR/share/glib-2.0/schemas"
 
           # Add Homebrew paths if they exist (for systems like immutable distros)
