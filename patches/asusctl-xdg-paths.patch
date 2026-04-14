@@ -1,0 +1,702 @@
+diff --git a/asusd/src/aura_anime/config.rs b/asusd/src/aura_anime/config.rs
+index 586cb3b..9716676 100644
+--- a/asusd/src/aura_anime/config.rs
++++ b/asusd/src/aura_anime/config.rs
+@@ -10,6 +10,49 @@ use serde::{Deserialize, Serialize};
+ 
+ const CONFIG_FILE: &str = "anime.ron";
+ 
++fn split_path_list(var: &str) -> Vec<std::path::PathBuf> {
++    std::env::var_os(var)
++        .map(|value| std::env::split_paths(&value).collect())
++        .unwrap_or_default()
++}
++
++fn data_roots() -> Vec<std::path::PathBuf> {
++    let override_roots = split_path_list("ASUSCTL_DATA_DIRS");
++    if !override_roots.is_empty() {
++        return override_roots;
++    }
++
++    let mut roots = split_path_list("XDG_DATA_DIRS");
++    if roots.is_empty() {
++        roots.push(std::path::PathBuf::from("/usr/local/share"));
++        roots.push(std::path::PathBuf::from("/usr/share"));
++    }
++    roots
++}
++
++fn asusd_data_dir() -> std::path::PathBuf {
++    if let Some(path) = std::env::var_os("ASUSD_DATA_DIR").map(std::path::PathBuf::from) {
++        return path;
++    }
++
++    for root in data_roots() {
++        let candidate = root.join("asusd");
++        if candidate.exists() {
++            return candidate;
++        }
++    }
++
++    data_roots()
++        .into_iter()
++        .next()
++        .unwrap_or_else(|| std::path::PathBuf::from("/usr/share"))
++        .join("asusd")
++}
++
++fn asusd_data_path(relative: &str) -> String {
++    asusd_data_dir().join(relative).display().to_string()
++}
++
+ #[derive(Debug, Clone, Deserialize, Serialize, Default)]
+ pub struct AniMeConfigCached {
+     pub system: Vec<ActionData>,
+@@ -140,7 +183,7 @@ impl AniMeConfig {
+             system: vec![],
+             boot: vec![
+                 ActionLoader::ImageAnimation {
+-                    file: "/usr/share/asusd/anime/custom/sonic-run.gif".into(),
++                    file: asusd_data_path("anime/custom/sonic-run.gif").into(),
+                     scale: 0.9,
+                     angle: 0.65,
+                     translation: Vec2::default(),
+@@ -154,7 +197,7 @@ impl AniMeConfig {
+             ],
+             wake: vec![
+                 ActionLoader::ImageAnimation {
+-                    file: "/usr/share/asusd/anime/custom/sonic-run.gif".into(),
++                    file: asusd_data_path("anime/custom/sonic-run.gif").into(),
+                     scale: 0.9,
+                     angle: 0.65,
+                     translation: Vec2::default(),
+@@ -168,7 +211,7 @@ impl AniMeConfig {
+             ],
+             shutdown: vec![
+                 ActionLoader::ImageAnimation {
+-                    file: "/usr/share/asusd/anime/custom/sonic-wait.gif".into(),
++                    file: asusd_data_path("anime/custom/sonic-wait.gif").into(),
+                     scale: 0.9,
+                     angle: 0.0,
+                     translation: Vec2::new(3.0, 2.0),
+diff --git a/asusd-user/src/config.rs b/asusd-user/src/config.rs
+index 36b5547..abaef16 100644
+--- a/asusd-user/src/config.rs
++++ b/asusd-user/src/config.rs
+@@ -1,3 +1,4 @@
++use std::env;
+ use std::path::PathBuf;
+ use std::time::Duration;
+ 
+@@ -12,6 +13,44 @@ use crate::error::Error;
+ 
+ const ROOT_CONF_DIR: &str = "rog";
+ 
++fn split_path_list(var: &str) -> Vec<PathBuf> {
++    env::var_os(var)
++        .map(|value| env::split_paths(&value).collect())
++        .unwrap_or_default()
++}
++
++fn preferred_data_root() -> PathBuf {
++    if let Some(path) = env::var_os("XDG_DATA_HOME").map(PathBuf::from) {
++        return path;
++    }
++
++    if let Some(path) = env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")) {
++        return path;
++    }
++
++    let override_roots = split_path_list("ASUSCTL_DATA_DIRS");
++    if let Some(path) = override_roots.into_iter().next() {
++        return path;
++    }
++
++    let xdg_roots = split_path_list("XDG_DATA_DIRS");
++    if let Some(path) = xdg_roots.into_iter().next() {
++        return path;
++    }
++
++    PathBuf::from("/usr/share")
++}
++
++fn asusd_data_dir() -> PathBuf {
++    env::var_os("ASUSD_DATA_DIR")
++        .map(PathBuf::from)
++        .unwrap_or_else(|| preferred_data_root().join("asusd"))
++}
++
++fn asusd_data_path(relative: &str) -> String {
++    asusd_data_dir().join(relative).display().to_string()
++}
++
+ fn root_conf_dir() -> PathBuf {
+     let mut dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+     dir.push(ROOT_CONF_DIR);
+@@ -47,7 +86,7 @@ impl Default for ConfigAnime {
+             name: "anime-default".to_owned(),
+             anime: vec![
+                 ActionLoader::AsusImage {
+-                    file: "/usr/share/asusd/anime/custom/diagonal-template.png".into(),
++                    file: asusd_data_path("anime/custom/diagonal-template.png").into(),
+                     brightness: 1.0,
+                     time: AnimTime::Fade(Fade::new(
+                         Duration::from_secs(2),
+@@ -56,7 +95,7 @@ impl Default for ConfigAnime {
+                     )),
+                 },
+                 ActionLoader::AsusAnimation {
+-                    file: "/usr/share/asusd/anime/asus/rog/Sunset.gif".into(),
++                    file: asusd_data_path("anime/asus/rog/Sunset.gif").into(),
+                     brightness: 0.5,
+                     time: AnimTime::Fade(Fade::new(
+                         Duration::from_secs(6),
+@@ -65,7 +104,7 @@ impl Default for ConfigAnime {
+                     )),
+                 },
+                 ActionLoader::ImageAnimation {
+-                    file: "/usr/share/asusd/anime/custom/sonic-run.gif".into(),
++                    file: asusd_data_path("anime/custom/sonic-run.gif").into(),
+                     scale: 0.9,
+                     angle: 0.65,
+                     translation: Vec2::default(),
+@@ -77,7 +116,7 @@ impl Default for ConfigAnime {
+                     )),
+                 },
+                 ActionLoader::Image {
+-                    file: "/usr/share/asusd/anime/custom/rust.png".into(),
++                    file: asusd_data_path("anime/custom/rust.png").into(),
+                     scale: 1.0,
+                     angle: 0.0,
+                     translation: Vec2::default(),
+@@ -90,7 +129,7 @@ impl Default for ConfigAnime {
+                 },
+                 ActionLoader::Pause(Duration::from_secs(1)),
+                 ActionLoader::ImageAnimation {
+-                    file: "/usr/share/asusd/anime/custom/sonic-wait.gif".into(),
++                    file: asusd_data_path("anime/custom/sonic-wait.gif").into(),
+                     scale: 0.9,
+                     angle: 0.0,
+                     translation: Vec2::new(3.0, 2.0),
+diff --git a/asusd-user/src/daemon.rs b/asusd-user/src/daemon.rs
+index 31f7970..cd25444 100644
+--- a/asusd-user/src/daemon.rs
++++ b/asusd-user/src/daemon.rs
+@@ -1,3 +1,4 @@
++use std::env;
+ use std::io::Write;
+ use std::path::PathBuf;
+ use std::sync::atomic::AtomicBool;
+@@ -15,12 +16,71 @@ use rog_dbus::{list_iface_blocking, DBUS_NAME};
+ use smol::Executor;
+ use zbus::Connection;
+ 
+-#[cfg(not(feature = "local_data"))]
+-const DATA_DIR: &str = "/usr/share/rog-gui/";
+-#[cfg(feature = "local_data")]
+-const DATA_DIR: &str = env!("CARGO_MANIFEST_DIR");
+ const BOARD_NAME: &str = "/sys/class/dmi/id/board_name";
+ 
++fn split_path_list(var: &str) -> Vec<PathBuf> {
++    env::var_os(var)
++        .map(|value| env::split_paths(&value).collect())
++        .unwrap_or_default()
++}
++
++fn data_roots() -> Vec<PathBuf> {
++    let mut roots = Vec::new();
++
++    let override_roots = split_path_list("ASUSCTL_DATA_DIRS");
++    if !override_roots.is_empty() {
++        roots.extend(override_roots);
++    } else {
++        if let Some(path) =
++            env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| {
++                env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"))
++            })
++        {
++            roots.push(path);
++        }
++
++        let xdg_roots = split_path_list("XDG_DATA_DIRS");
++        if xdg_roots.is_empty() {
++            roots.push(PathBuf::from("/usr/local/share"));
++            roots.push(PathBuf::from("/usr/share"));
++        } else {
++            roots.extend(xdg_roots);
++        }
++    }
++
++    if roots.is_empty() {
++        roots.push(PathBuf::from("/usr/share"));
++    }
++
++    roots
++}
++
++fn rog_gui_data_dir() -> PathBuf {
++    if let Some(path) = env::var_os("ROG_GUI_DATA_DIR").map(PathBuf::from) {
++        return path;
++    }
++
++    if let Some(path) = env::var_os("ROG_GUI_LAYOUTS_DIR").map(PathBuf::from) {
++        return path
++            .parent()
++            .map(PathBuf::from)
++            .unwrap_or_else(|| PathBuf::from("/usr/share/rog-gui"));
++    }
++
++    for root in data_roots() {
++        let candidate = root.join("rog-gui");
++        if candidate.join("layouts").is_dir() {
++            return candidate;
++        }
++    }
++
++    data_roots()
++        .into_iter()
++        .next()
++        .unwrap_or_else(|| PathBuf::from("/usr/share"))
++        .join("rog-gui")
++}
++
+ fn main() -> Result<(), Box<dyn std::error::Error>> {
+     let mut logger = env_logger::Builder::new();
+     logger
+@@ -91,7 +151,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+ 
+         let led_support = LedSupportData::get_data("");
+ 
+-        let layout = KeyLayout::find_layout(led_support, PathBuf::from(DATA_DIR))
++        let layout = KeyLayout::find_layout(led_support, rog_gui_data_dir())
+             .map_err(|e| {
+                 println!("{BOARD_NAME}, {e}");
+             })
+diff --git a/data/asus-shutdown.service b/data/asus-shutdown.service
+index c2e2d47..bdab40c 100644
+--- a/data/asus-shutdown.service
++++ b/data/asus-shutdown.service
+@@ -8,9 +8,11 @@ Requires=asusd.service dbus.service
+ PartOf=asusd.service
+ 
+ [Service]
++EnvironmentFile=-/etc/asusd/asusd.env
++Environment=ASUS_SHUTDOWN_EXEC=/usr/bin/asus-shutdown
+ Environment=IS_SERVICE=1
+ Environment=RUST_LOG="info,asus_shutdown=debug,zbus::connection::handshake::common=error,zbus::connection::handshake::client=error"
+-ExecStart=/usr/bin/asus-shutdown
++ExecStart=${ASUS_SHUTDOWN_EXEC}
+ Restart=on-failure
+ RestartSec=1
+ Type=simple
+diff --git a/data/asusd-user.service b/data/asusd-user.service
+index ba84517..d954735 100644
+--- a/data/asusd-user.service
++++ b/data/asusd-user.service
+@@ -4,11 +4,13 @@ StartLimitInterval=200
+ StartLimitBurst=2
+ 
+ [Service]
++EnvironmentFile=-%h/.config/asusd/asusd-user.env
++Environment=ASUSD_USER_EXEC=/usr/bin/asusd-user
+ ExecStartPre=/usr/bin/sleep 2
+-ExecStart=/usr/bin/asusd-user
++ExecStart=${ASUSD_USER_EXEC}
+ Restart=on-failure
+ RestartSec=1
+ Type=simple
+ 
+ [Install]
+-WantedBy=default.target
+\ No newline at end of file
++WantedBy=default.target
+diff --git a/data/asusd.service b/data/asusd.service
+index 2133584..a3ab27b 100644
+--- a/data/asusd.service
++++ b/data/asusd.service
+@@ -6,6 +6,8 @@ After=nvidia-powerd.service systemd-udevd.service
+ Before=asus-shutdown.service
+ 
+ [Service]
++EnvironmentFile=-/etc/asusd/asusd.env
++Environment=ASUSD_EXEC=/usr/bin/asusd
+ Environment=IS_SERVICE=1
+ # Reduce noisy span logs while keeping useful debug info for asusd and related crates.
+ # Keep global level at info but allow debug for our crates; silence tracing::span (very noisy)
+@@ -13,7 +15,7 @@ Environment=IS_SERVICE=1
+ Environment=RUST_LOG="info,asusd=debug,rog_platform=debug,tracing::span=error,zbus::object_server=error,zbus::connection::handshake::common=error,zbus::connection::handshake::client=error"
+ # required to prevent init issues with hid_asus and MCU
+ ExecStartPre=/bin/sleep 1
+-ExecStart=/usr/bin/asusd
++ExecStart=${ASUSD_EXEC}
+ Restart=on-failure
+ RestartSec=1
+ Type=dbus
+diff --git a/rog-aura/src/aura_detection.rs b/rog-aura/src/aura_detection.rs
+index db55865..b0379af 100644
+--- a/rog-aura/src/aura_detection.rs
++++ b/rog-aura/src/aura_detection.rs
+@@ -1,4 +1,5 @@
+ use std::env;
++use std::path::PathBuf;
+ 
+ use dmi_id::DMIID;
+ use log::{error, info, warn};
+@@ -7,8 +8,105 @@ use serde::{Deserialize, Serialize};
+ use crate::keyboard::AdvancedAuraType;
+ use crate::{AuraModeNum, AuraZone, PowerZones};
+ 
+-pub const ASUS_LED_MODE_CONF: &str = "/usr/share/asusd/aura_support.ron";
+-pub const ASUS_LED_MODE_USER_CONF: &str = "/etc/asusd/asusd_user_ledmodes.ron";
++const ASUS_LED_MODE_CONF: &str = "asusd/aura_support.ron";
++const ASUS_LED_MODE_USER_CONF: &str = "asusd_user_ledmodes.ron";
++
++fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
++    if !paths.iter().any(|candidate| candidate == &path) {
++        paths.push(path);
++    }
++}
++
++fn split_path_list(var: &str) -> Vec<PathBuf> {
++    env::var_os(var)
++        .map(|value| env::split_paths(&value).collect())
++        .unwrap_or_default()
++}
++
++fn xdg_data_home() -> Option<PathBuf> {
++    env::var_os("XDG_DATA_HOME")
++        .map(PathBuf::from)
++        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
++}
++
++fn xdg_config_home() -> Option<PathBuf> {
++    env::var_os("XDG_CONFIG_HOME")
++        .map(PathBuf::from)
++        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
++}
++
++fn data_roots() -> Vec<PathBuf> {
++    let mut roots = Vec::new();
++
++    let override_roots = split_path_list("ASUSCTL_DATA_DIRS");
++    if !override_roots.is_empty() {
++        roots.extend(override_roots);
++    } else {
++        if let Some(path) = xdg_data_home() {
++            push_unique(&mut roots, path);
++        }
++
++        let xdg_roots = split_path_list("XDG_DATA_DIRS");
++        if xdg_roots.is_empty() {
++            push_unique(&mut roots, PathBuf::from("/usr/local/share"));
++            push_unique(&mut roots, PathBuf::from("/usr/share"));
++        } else {
++            for path in xdg_roots {
++                push_unique(&mut roots, path);
++            }
++        }
++    }
++
++    if roots.is_empty() {
++        roots.push(PathBuf::from("/usr/share"));
++    }
++
++    roots
++}
++
++fn config_roots() -> Vec<PathBuf> {
++    let mut roots = Vec::new();
++
++    if let Some(path) = env::var_os("ASUSD_CONFIG_DIR").map(PathBuf::from) {
++        roots.push(path);
++        return roots;
++    }
++
++    if let Some(path) = xdg_config_home() {
++        push_unique(&mut roots, path.join("asusd"));
++    }
++
++    push_unique(&mut roots, PathBuf::from("/etc/asusd"));
++    roots
++}
++
++fn default_aura_support_candidates() -> Vec<PathBuf> {
++    let mut candidates = Vec::new();
++
++    if let Some(path) = env::var_os("ASUSCTL_AURA_SUPPORT_PATH").map(PathBuf::from) {
++        candidates.push(path);
++    }
++
++    for root in data_roots() {
++        push_unique(&mut candidates, root.join(ASUS_LED_MODE_CONF));
++    }
++
++    candidates
++}
++
++fn user_led_mode_candidates() -> Vec<PathBuf> {
++    let mut candidates = Vec::new();
++
++    if let Some(path) = env::var_os("ASUSD_USER_LED_MODES_PATH").map(PathBuf::from) {
++        candidates.push(path);
++    }
++
++    for root in config_roots() {
++        push_unique(&mut candidates, root.join(ASUS_LED_MODE_USER_CONF));
++    }
++
++    candidates
++}
+ 
+ #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+ pub struct LedSupportData {
+@@ -120,42 +218,41 @@ impl LedSupportFile {
+         }
+     }
+ 
+-    /// Load `LedSupportFile` from the `aura_support.ron` file at
+-    /// `/usr/share/asusd/aura_support.ron` and append with data from
+-    /// `/etc/asusd/asusd_user_ledmodes.ron` if that file is available.
++    /// Load `LedSupportFile` from XDG-aware data locations and append any
++    /// user-defined data from XDG-aware config locations if available.
+     ///
+     /// Returns `None` if neither file exists or does not parse correctly.
+     pub fn load_from_support_db() -> Option<Self> {
+         let mut loaded = false;
+         let mut data = LedSupportFile::default();
+         // Load user configs first so they are first to be checked
+-        if let Ok(file) = std::fs::read_to_string(ASUS_LED_MODE_USER_CONF) {
+-            if file.is_empty() {
+-                warn!("{} is empty", ASUS_LED_MODE_USER_CONF);
+-            } else {
+-                if let Ok(mut tmp) = ron::from_str::<LedSupportFile>(&file) {
+-                    data.0.append(&mut tmp.0);
++        for candidate in user_led_mode_candidates() {
++            if let Ok(file) = std::fs::read_to_string(&candidate) {
++                if file.is_empty() {
++                    warn!("{candidate:?} is empty");
++                } else {
++                    if let Ok(mut tmp) = ron::from_str::<LedSupportFile>(&file) {
++                        data.0.append(&mut tmp.0);
++                    }
++                    info!("Loaded user-defined LED support data from {:?}", candidate);
+                 }
+-                info!(
+-                    "Loaded user-defined LED support data from {}",
+-                    ASUS_LED_MODE_USER_CONF
+-                );
++                break;
+             }
+         }
+         // Load and append the default LED support data
+-        if let Ok(file) = std::fs::read_to_string(ASUS_LED_MODE_CONF) {
+-            if file.is_empty() {
+-                warn!("{} is empty", ASUS_LED_MODE_CONF);
+-            } else {
+-                let mut tmp: LedSupportFile = ron::from_str(&file)
+-                    .map_err(|e| error!("{e}"))
+-                    .unwrap_or_else(|_| panic!("Could not deserialise {}", ASUS_LED_MODE_CONF));
+-                data.0.append(&mut tmp.0);
+-                loaded = true;
+-                info!(
+-                    "Loaded default LED support data from {}",
+-                    ASUS_LED_MODE_CONF
+-                );
++        for candidate in default_aura_support_candidates() {
++            if let Ok(file) = std::fs::read_to_string(&candidate) {
++                if file.is_empty() {
++                    warn!("{candidate:?} is empty");
++                } else {
++                    let mut tmp: LedSupportFile = ron::from_str(&file)
++                        .map_err(|e| error!("{e}"))
++                        .unwrap_or_else(|_| panic!("Could not deserialise {:?}", candidate));
++                    data.0.append(&mut tmp.0);
++                    loaded = true;
++                    info!("Loaded default LED support data from {:?}", candidate);
++                }
++                break;
+             }
+         }
+         data.0.sort_by(|a, b| a.device_name.cmp(&b.device_name));
+@@ -183,7 +280,10 @@ impl LedSupportFile {
+             }
+         }
+ 
+-        warn!("Does {} exist?", ASUS_LED_MODE_USER_CONF);
++        warn!(
++            "No user LED override file found in {:?}",
++            user_led_mode_candidates()
++        );
+         None
+     }
+ }
+diff --git a/rog-control-center/src/lib.rs b/rog-control-center/src/lib.rs
+index 07b5268..16d432c 100644
+--- a/rog-control-center/src/lib.rs
++++ b/rog-control-center/src/lib.rs
+@@ -2,6 +2,8 @@
+ #![allow(clippy::redundant_clone, clippy::cmp_owned)]
+ slint::include_modules!();
+ 
++use std::path::PathBuf;
++
+ /// Intentionally reexport slint so that GUI consumers don't need to add to
+ /// `Cargo.toml`
+ pub use slint;
+@@ -12,13 +14,17 @@ pub mod error;
+ #[cfg(feature = "mocking")]
+ pub mod mocking;
+ pub mod notify;
++pub mod paths;
+ pub mod tray;
+ pub mod types;
+ pub mod ui;
+ pub mod zbus_proxies;
+ 
+ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+-pub const APP_ICON_PATH: &str = "/usr/share/icons/hicolor/512x512/apps/rog-control-center.png";
++
++pub fn app_icon_path() -> PathBuf {
++    paths::icon_path("rog-control-center.png")
++}
+ 
+ pub fn print_versions() {
+     println!("App and daemon versions:");
+diff --git a/rog-control-center/src/main.rs b/rog-control-center/src/main.rs
+index 2e72d48..e068710 100644
+--- a/rog-control-center/src/main.rs
++++ b/rog-control-center/src/main.rs
+@@ -184,13 +184,11 @@ async fn main() -> Result<()> {
+         }
+     }
+ 
+-    if std::env::var("RUST_TRANSLATIONS").is_ok() {
+-        // don't care about content
+-        log::debug!("---- Using local-dir translations");
+-        slint::init_translations!("/usr/share/locale/");
++    if let Some(locale_dir) = rog_control_center::paths::existing_locale_dir() {
++        log::debug!("Using locale directory at {:?}", locale_dir);
++        slint::init_translations!(locale_dir.as_path());
+     } else {
+-        log::debug!("Using system installed translations");
+-        slint::init_translations!(concat!(env!("CARGO_MANIFEST_DIR"), "/translations/"));
++        log::debug!("No locale directory found, skipping gettext initialization");
+     }
+ 
+     // Prefetch supported Aura modes once at startup and move into the
+diff --git a/tmp/asusctl-main-patched/rog-control-center/src/paths.rs b/rog-control-center/src/paths.rs
+new file mode 100644
+index 0000000..df191b1
+--- /dev/null
++++ b/rog-control-center/src/paths.rs
+@@ -0,0 +1,79 @@
++use std::env;
++use std::path::PathBuf;
++
++fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
++    if !paths.iter().any(|candidate| candidate == &path) {
++        paths.push(path);
++    }
++}
++
++fn split_path_list(var: &str) -> Vec<PathBuf> {
++    env::var_os(var)
++        .map(|value| env::split_paths(&value).collect())
++        .unwrap_or_default()
++}
++
++fn xdg_data_home() -> Option<PathBuf> {
++    env::var_os("XDG_DATA_HOME")
++        .map(PathBuf::from)
++        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
++}
++
++pub fn data_roots() -> Vec<PathBuf> {
++    let mut roots = Vec::new();
++
++    let override_roots = split_path_list("ASUSCTL_DATA_DIRS");
++    if !override_roots.is_empty() {
++        roots.extend(override_roots);
++    } else {
++        if let Some(path) = xdg_data_home() {
++            push_unique(&mut roots, path);
++        }
++
++        let xdg_roots = split_path_list("XDG_DATA_DIRS");
++        if xdg_roots.is_empty() {
++            push_unique(&mut roots, PathBuf::from("/usr/local/share"));
++            push_unique(&mut roots, PathBuf::from("/usr/share"));
++        } else {
++            for path in xdg_roots {
++                push_unique(&mut roots, path);
++            }
++        }
++    }
++
++    if roots.is_empty() {
++        roots.push(PathBuf::from("/usr/share"));
++    }
++
++    roots
++}
++
++pub fn data_path(relative: &str) -> PathBuf {
++    for root in data_roots() {
++        let candidate = root.join(relative);
++        if candidate.exists() {
++            return candidate;
++        }
++    }
++
++    data_roots()
++        .into_iter()
++        .next()
++        .unwrap_or_else(|| PathBuf::from("/usr/share"))
++        .join(relative)
++}
++
++pub fn icon_path(file: &str) -> PathBuf {
++    data_path(&format!("icons/hicolor/512x512/apps/{file}"))
++}
++
++pub fn existing_locale_dir() -> Option<PathBuf> {
++    if let Some(path) = env::var_os("ASUSCTL_LOCALE_DIR").map(PathBuf::from) {
++        return Some(path);
++    }
++
++    data_roots()
++        .into_iter()
++        .map(|root| root.join("locale"))
++        .find(|candidate| candidate.exists())
++}
+diff --git a/rog-control-center/src/tray.rs b/rog-control-center/src/tray.rs
+index ea80671..ad3fdca 100644
+--- a/rog-control-center/src/tray.rs
++++ b/rog-control-center/src/tray.rs
+@@ -2,7 +2,7 @@
+ 
+ use std::fs::OpenOptions;
+ use std::io::Read;
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ use std::sync::{Arc, Mutex, OnceLock};
+ use std::time::Duration;
+ 
+@@ -17,7 +17,6 @@ use crate::config::Config;
+ use crate::zbus_proxies::{AppState, ROGCCZbusProxyBlocking};
+ 
+ const TRAY_LABEL: &str = "ROG Control Center";
+-const TRAY_ICON_PATH: &str = "/usr/share/icons/hicolor/512x512/apps/";
+ 
+ struct Icons {
+     rog_blue: Icon,
+@@ -30,8 +29,7 @@ struct Icons {
+ static ICONS: OnceLock<Icons> = OnceLock::new();
+ 
+ fn read_icon(file: &Path) -> Icon {
+-    let mut path = PathBuf::from(TRAY_ICON_PATH);
+-    path.push(file);
++    let path = crate::paths::icon_path(file.to_string_lossy().as_ref());
+     let mut file = OpenOptions::new()
+         .read(true)
+         .open(&path)

@@ -1,0 +1,244 @@
+name: Build asusctl
+
+on:
+  workflow_dispatch:
+    inputs:
+      asusctl_version:
+        description: "asusctl version to build (e.g. 6.3.7)"
+        required: false
+        default: "6.3.7"
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  ASUSCTL_VERSION: ${{ github.event.inputs.asusctl_version || '6.3.7' }}
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  build-asusctl:
+    name: Build asusctl
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "ubuntu-22.04"
+            container: "ubuntu:22.04"
+            arch: "amd64"
+            runner: "ubuntu-latest"
+          - name: "ubuntu-22.04"
+            container: "ubuntu:22.04"
+            arch: "arm64"
+            runner: "ubuntu-24.04-arm"
+
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            clang \
+            cmake \
+            curl \
+            desktop-file-utils \
+            file \
+            git \
+            libasound2-dev \
+            libclang-dev \
+            libdrm-dev \
+            libegl1-mesa-dev \
+            libexpat1-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libgbm-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libinput-dev \
+            libpcre2-dev \
+            libseat-dev \
+            libssl-dev \
+            libsystemd-dev \
+            libudev-dev \
+            libwayland-dev \
+            libx11-dev \
+            libxcb-composite0-dev \
+            libxkbcommon-dev \
+            libzstd-dev \
+            make \
+            patch \
+            pkg-config \
+            wayland-protocols
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+            sh -s -- -y --profile minimal --default-toolchain 1.82.0
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Download asusctl source
+        run: |
+          mkdir -p source
+          curl -L --fail --silent --show-error \
+            "https://gitlab.com/asus-linux/asusctl/-/archive/${ASUSCTL_VERSION}/asusctl-${ASUSCTL_VERSION}.tar.gz" | \
+            tar -xz --strip-components=1 -C source
+
+      - name: Apply XDG and service path patch
+        run: |
+          cd source
+          git apply --check --unsafe-paths "$GITHUB_WORKSPACE/patches/asusctl-xdg-paths.patch"
+          git apply --unsafe-paths "$GITHUB_WORKSPACE/patches/asusctl-xdg-paths.patch"
+
+      - name: Build asusctl
+        run: |
+          cd source
+          make STRIP_BINARIES=1 build
+
+      - name: Validate desktop entry
+        run: |
+          cd source
+          desktop-file-validate rog-control-center/data/rog-control-center.desktop
+
+      - name: Install into packaging root
+        run: |
+          cd source
+          make install DESTDIR="$PWD/install-root" prefix=/usr
+          install -D -m 0644 data/asusd-user.service \
+            "$PWD/install-root/usr/lib/systemd/user/asusd-user.service"
+
+      - name: Create distribution archive
+        run: |
+          cd source
+
+          PACKAGE_NAME="asusctl-${ASUSCTL_VERSION}-${{ matrix.name }}-${{ matrix.arch }}"
+          rm -rf "$PACKAGE_NAME" "$PACKAGE_NAME.tar.gz"
+
+          mkdir -p "$PACKAGE_NAME"
+          cp -a install-root/usr "$PACKAGE_NAME/"
+
+          find "$PACKAGE_NAME/usr" -type f | LC_ALL=C sort > "$PACKAGE_NAME/FILE_LIST.txt"
+
+          cat > "$PACKAGE_NAME/PACKAGE_INFO.txt" << EOF
+          asusctl Build Information
+          ========================
+
+          Version: ${ASUSCTL_VERSION}
+          Distribution Base: ${{ matrix.name }}
+          Architecture: ${{ matrix.arch }}
+          Container: ${{ matrix.container }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Git Commit: ${{ github.sha }}
+
+          Package Layout
+          --------------
+          This archive preserves an install-root style usr/ layout so downstream
+          packaging tools such as Homebrew Cask can place files where they need
+          to go.
+
+          Included Components
+          -------------------
+          - /usr/bin/asusctl
+          - /usr/bin/asusd
+          - /usr/bin/asus-shutdown
+          - /usr/bin/asusd-user
+          - /usr/bin/rog-control-center
+          - /usr/lib/systemd/system/asusd.service
+          - /usr/lib/systemd/system/asus-shutdown.service
+          - /usr/lib/systemd/user/asusd-user.service
+          - /usr/lib/udev/rules.d/99-asusd.rules
+          - /usr/share/dbus-1/system.d/asusd.conf
+          - /usr/share/asusd/*
+          - /usr/share/rog-gui/*
+          - /usr/share/applications/rog-control-center.desktop
+          - /usr/share/icons/*
+
+          XDG and Override Notes
+          ----------------------
+          The build applies a patch so user-space data can resolve from XDG-style
+          locations first:
+          - XDG_DATA_HOME / ~/.local/share
+          - XDG_DATA_DIRS
+          - ASUSCTL_DATA_DIRS override
+          - ASUSD_DATA_DIR override
+          - ROG_GUI_DATA_DIR / ROG_GUI_LAYOUTS_DIR override
+          - ASUSCTL_AURA_SUPPORT_PATH override
+          - ASUSCTL_LOCALE_DIR override
+
+          Service Override Notes
+          ----------------------
+          The root daemon units can override binary locations through:
+          - /etc/asusd/asusd.env
+
+          Supported variables:
+          - ASUSD_EXEC=/path/to/asusd
+          - ASUS_SHUTDOWN_EXEC=/path/to/asus-shutdown
+
+          The user daemon unit can override its binary through:
+          - ~/.config/asusd/asusd-user.env
+
+          Supported variable:
+          - ASUSD_USER_EXEC=/path/to/asusd-user
+          EOF
+
+          tar -czf "$PACKAGE_NAME.tar.gz" "$PACKAGE_NAME"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: asusctl-${{ env.ASUSCTL_VERSION }}-${{ matrix.name }}-${{ matrix.arch }}
+          path: source/*.tar.gz
+          retention-days: 30
+
+  create-release:
+    name: Create Release
+    needs: build-asusctl
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: asusctl-*
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: asusctl-${{ env.ASUSCTL_VERSION }}-${{ github.run_number }}
+          name: asusctl ${{ env.ASUSCTL_VERSION }} Build ${{ github.run_number }}
+          body: |
+            # asusctl ${{ env.ASUSCTL_VERSION }}
+
+            This release contains prebuilt Linux archives laid out as a `usr/`
+            install root for downstream packaging, primarily Homebrew Cask.
+
+            Included payload:
+            - `asusctl`
+            - `asusd`
+            - `asus-shutdown`
+            - `asusd-user`
+            - `rog-control-center`
+            - systemd, udev, DBus, icon, desktop, aura, and anime support files
+
+            Packaging notes:
+            - User-space data lookups prefer XDG locations such as
+              `~/.local/share` and `~/.config`
+            - The root daemon units can override binary paths via
+              `/etc/asusd/asusd.env`
+            - The user daemon unit can override its binary path via
+              `~/.config/asusd/asusd-user.env`
+
+            Built from commit: ${{ github.sha }}
+          files: artifacts/*/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

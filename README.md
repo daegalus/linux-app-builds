@@ -31,6 +31,28 @@ The goal of this repository is to provide reliable, automated builds of Linux ap
   - **Alpine Linux (musl)**: Static build with minimal dependencies
   - **Fedora Latest**: Dynamic build with latest libraries
 
+### asusctl
+
+- **File**: `.github/workflows/build-asusctl.yaml`
+- **Purpose**:
+  - Builds the `asusctl` suite as a Cask-friendly `usr/` install root archive
+  - Ships the main binaries plus the service, udev, DBus, desktop, icon, aura,
+    and anime support files that downstream packaging needs
+- **Included Programs**:
+  - `asusctl`
+  - `asusd`
+  - `asus-shutdown`
+  - `asusd-user`
+  - `rog-control-center`
+- **Packaging Notes**:
+  - Applies a local patch from `patches/asusctl-xdg-paths.patch`
+  - User-space data lookups prefer XDG-style locations such as
+    `~/.local/share` and `~/.config`
+  - The root daemon units can override binary paths through
+    `/etc/asusd/asusd.env`
+  - The user daemon unit can override its binary path through
+    `~/.config/asusd/asusd-user.env`
+
 ## Usage
 
 ### For End Users
