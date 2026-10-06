@@ -4,16 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       asusctl_version:
-        description: "asusctl version to build (e.g. 6.3.7)"
+        description: "OpenGamingCollective/asusctl tag to build (e.g. 6.5.0)"
         required: false
-        default: "6.3.7"
+        default: "6.5.0"
         type: string
 
 permissions:
   contents: write
 
 env:
-  ASUSCTL_VERSION: ${{ github.event.inputs.asusctl_version || '6.3.7' }}
+  ASUSCTL_VERSION: ${{ github.event.inputs.asusctl_version || '6.5.0' }}
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
@@ -51,6 +51,7 @@ jobs:
             curl \
             desktop-file-utils \
             file \
+            gettext \
             git \
             libasound2-dev \
             libclang-dev \
@@ -65,6 +66,7 @@ jobs:
             libinput-dev \
             libpcre2-dev \
             libseat-dev \
+            libsdl2-dev \
             libssl-dev \
             libsystemd-dev \
             libudev-dev \
@@ -81,21 +83,21 @@ jobs:
       - name: Install Rust toolchain
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-            sh -s -- -y --profile minimal --default-toolchain 1.82.0
+            sh -s -- -y --profile minimal --default-toolchain 1.93.0
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Download asusctl source
         run: |
           mkdir -p source
           curl -L --fail --silent --show-error \
-            "https://gitlab.com/asus-linux/asusctl/-/archive/${ASUSCTL_VERSION}/asusctl-${ASUSCTL_VERSION}.tar.gz" | \
+            "https://github.com/OpenGamingCollective/asusctl/archive/refs/tags/${ASUSCTL_VERSION}.tar.gz" | \
             tar -xz --strip-components=1 -C source
 
       - name: Apply XDG and service path patch
         run: |
           cd source
-          git apply --check --unsafe-paths "$GITHUB_WORKSPACE/patches/asusctl-xdg-paths.patch"
-          git apply --unsafe-paths "$GITHUB_WORKSPACE/patches/asusctl-xdg-paths.patch"
+          git apply --check "$GITHUB_WORKSPACE/patches/asusctl-xdg-paths.patch"
+          git apply "$GITHUB_WORKSPACE/patches/asusctl-xdg-paths.patch"
 
       - name: Build asusctl
         run: |
@@ -105,7 +107,7 @@ jobs:
       - name: Validate desktop entry
         run: |
           cd source
-          desktop-file-validate rog-control-center/data/rog-control-center.desktop
+          desktop-file-validate rog-control-center/data/org.opengamingcollective.rog-control-center.desktop
 
       - name: Install into packaging root
         run: |
@@ -131,6 +133,7 @@ jobs:
           ========================
 
           Version: ${ASUSCTL_VERSION}
+          Source: https://github.com/OpenGamingCollective/asusctl
           Distribution Base: ${{ matrix.name }}
           Architecture: ${{ matrix.arch }}
           Container: ${{ matrix.container }}
@@ -157,7 +160,9 @@ jobs:
           - /usr/share/dbus-1/system.d/asusd.conf
           - /usr/share/asusd/*
           - /usr/share/rog-gui/*
-          - /usr/share/applications/rog-control-center.desktop
+          - /usr/share/applications/org.opengamingcollective.rog-control-center.desktop
+          - /usr/share/metainfo/org.opengamingcollective.rog-control-center.metainfo.xml
+          - /usr/share/locale/*/LC_MESSAGES/rog-control-center.mo
           - /usr/share/icons/*
 
           XDG and Override Notes
@@ -219,6 +224,7 @@ jobs:
 
             This release contains prebuilt Linux archives laid out as a `usr/`
             install root for downstream packaging, primarily Homebrew Cask.
+            Source: https://github.com/OpenGamingCollective/asusctl
 
             Included payload:
             - `asusctl`

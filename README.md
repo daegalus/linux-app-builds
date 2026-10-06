@@ -34,6 +34,8 @@ The goal of this repository is to provide reliable, automated builds of Linux ap
 ### asusctl
 
 - **File**: `.github/workflows/build-asusctl.yaml`
+- **Source**: [OpenGamingCollective/asusctl](https://github.com/OpenGamingCollective/asusctl)
+- **Default Version**: `6.5.0` (Rust `1.93.0`)
 - **Purpose**:
   - Builds the `asusctl` suite as a Cask-friendly `usr/` install root archive
   - Ships the main binaries plus the service, udev, DBus, desktop, icon, aura,
@@ -45,7 +47,7 @@ The goal of this repository is to provide reliable, automated builds of Linux ap
   - `asusd-user`
   - `rog-control-center`
 - **Packaging Notes**:
-  - Applies a local patch from `patches/asusctl-xdg-paths.patch`
+  - Applies `patches/asusctl-xdg-paths.patch`, rebased against upstream `6.5.0`
   - User-space data lookups prefer XDG-style locations such as
     `~/.local/share` and `~/.config`
   - The root daemon units can override binary paths through
